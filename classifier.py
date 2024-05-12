@@ -140,13 +140,13 @@ def load_data(filename, flag='train'):
     num_labels = {}
     data = []
     if flag == 'test':
-        with open(filename, 'r') as fp:
+        with open(filename, 'r', encoding='UTF-8') as fp:
             for record in csv.DictReader(fp,delimiter = '\t'):
                 sent = record['sentence'].lower().strip()
                 sent_id = record['id'].lower().strip()
                 data.append((sent,sent_id))
     else:
-        with open(filename, 'r') as fp:
+        with open(filename, 'r', encoding='UTF-8') as fp:
             for record in csv.DictReader(fp,delimiter = '\t'):
                 sent = record['sentence'].lower().strip()
                 sent_id = record['id'].lower().strip()
