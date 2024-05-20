@@ -49,8 +49,21 @@ class BertSelfAttention(nn.Module):
     # - Before returning, concatenate multi-heads to recover the original shape:
     #   [bs, seq_len, num_attention_heads * attention_head_size = hidden_size].
 
-    ### TODO
-    raise NotImplementedError
+    x = query @ key.transpose(-1, -2) # [bs, num_attention_heads, seq_len, seq_len]
+    
+    # Mask out the padding tokens using Hadamard product
+    x += attention_mask   # [bs, num_attention_heads, seq_len, seq_len]
+
+    # Normalization
+    x /= self.attention_head_size ** 0.5 # [bs, num_attention_heads, seq_len, seq_len]
+
+    # Softmax
+    alpha = F.softmax(x, dim=-1) # [bs, num_attention_heads, seq_len, seq_len]
+    alpha = self.dropout(alpha)
+
+    t = alpha @ value # [bs, num_attention_heads, seq_len, attention_head_size]
+
+    return t.permute(0, 2, 1, 3).flatten(2, 3) # [bs, seq_len, hidden_size]
 
 
   def forward(self, hidden_states, attention_mask):
