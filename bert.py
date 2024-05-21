@@ -48,7 +48,7 @@ class BertSelfAttention(nn.Module):
     # - Multiply the attention scores with the value to get back weighted values.
     # - Before returning, concatenate multi-heads to recover the original shape:
     #   [bs, seq_len, num_attention_heads * attention_head_size = hidden_size].
-
+    print(key.shape, query.shape)
     ### TODO
     raise NotImplementedError
 

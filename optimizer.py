@@ -38,7 +38,6 @@ class AdamW(Optimizer):
                 grad = p.grad.data
                 if grad.is_sparse:
                     raise RuntimeError("Adam does not support sparse gradients, please consider SparseAdam instead")
-
                 # State should be stored in this dictionary.
                 state = self.state[p]
 
@@ -58,9 +57,24 @@ class AdamW(Optimizer):
                 # 3. Update parameters (p.data).
                 # 4. Apply weight decay after the main gradient-based updates.
                 # Refer to the default project handout for more details.
-
                 ### TODO
-                raise NotImplementedError
+                m1, m2 = 'm1', 'm2'
+                data_size = p.data
+                if m1 not in state:
+                    state[m1] = torch.zeros_like(data_size)
+                if m2 not in state:
+                    state[m2] = torch.zeros_like(data_size)
+                b1, b2 = group['betas']
+                eps = group['eps']
 
+                state['step'] += 1
+                state['m1'] = b1 * state['m1'] + (1-b1) * grad
+                state['m2'] = b2 * state['m2'] + (1-b2) * (torch.pow(grad,2))
+
+                m1_hat = state['m1'] / (1-b1)
+                m2_hat = state['m2'] / (1-b2)
+
+                p.data = p.data - alpha * m1_hat / torch.sqrt(m2_hat) + eps
+                p.data = p.data - alpha * group['weight_decay'] * p.data
 
         return loss
