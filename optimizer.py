@@ -17,10 +17,13 @@ class AdamW(Optimizer):
     ):
         if lr < 0.0:
             raise ValueError("Invalid learning rate: {} - should be >= 0.0".format(lr))
+
         if not 0.0 <= betas[0] < 1.0:
-            raise ValueError("Invalid beta parameter: {} - should be in [0.0, 1.0[".format(betas[0]))
+            raise ValueError("Invalid beta parameter: {} - should be in [0.0, 1.0]".format(betas[0]))
+
         if not 0.0 <= betas[1] < 1.0:
-            raise ValueError("Invalid beta parameter: {} - should be in [0.0, 1.0[".format(betas[1]))
+            raise ValueError("Invalid beta parameter: {} - should be in [0.0, 1.0]".format(betas[1]))
+
         if not 0.0 <= eps:
             raise ValueError("Invalid epsilon value: {} - should be >= 0.0".format(eps))
         defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay, correct_bias=correct_bias)
@@ -59,8 +62,28 @@ class AdamW(Optimizer):
                 # 4. Apply weight decay after the main gradient-based updates.
                 # Refer to the default project handout for more details.
 
+                m_t_old = state.get("m_t", torch.zeros_like(p.data))
+                v_t_old = state.get("v_t", torch.zeros_like(p.data))
+                t = state.get("t", 1)
+                
                 ### TODO
-                raise NotImplementedError
+                beta1, beta2 = group["betas"]
+                weight_decay = group["weight_decay"]
 
+                m_t = beta1 * m_t_old + ((1 - beta1) * grad)
+                v_t = beta2 * v_t_old + ((1 - beta2) * (grad ** 2))
+                
+                state["m_t"] = m_t
+                state["v_t"] = v_t
+
+                if group["correct_bias"]:
+                    m_t = m_t / (1 - beta1 ** t)
+                    v_t = v_t / (1 - beta2 ** t)
+
+                t += 1
+                state["t"] = t
+
+                p.data -= alpha * m_t / (torch.sqrt(v_t) + group["eps"])
+                p.data -= alpha * weight_decay * p.data
 
         return loss
