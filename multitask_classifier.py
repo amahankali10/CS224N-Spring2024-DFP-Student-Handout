@@ -72,8 +72,18 @@ class MultitaskBERT(nn.Module):
             elif config.fine_tune_mode == 'full-model':
                 param.requires_grad = True
         # You will want to add layers here to perform the downstream tasks.
-        ### TODO
-        raise NotImplementedError
+        
+        self.sentiment_dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.sentiment_linear = nn.Linear(BERT_HIDDEN_SIZE, BERT_HIDDEN_SIZE)
+        self.sentiment_out = nn.Linear(BERT_HIDDEN_SIZE, N_SENTIMENT_CLASSES)
+
+        self.paraphrase_dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.paraphrase_linear = nn.Linear(BERT_HIDDEN_SIZE, BERT_HIDDEN_SIZE)
+        self.paraphrase_out = nn.Linear(BERT_HIDDEN_SIZE, N_SENTIMENT_CLASSES)
+
+        self.similar_dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.similar_linear = nn.Linear(BERT_HIDDEN_SIZE, BERT_HIDDEN_SIZE)
+        self.similar_out = nn.Linear(BERT_HIDDEN_SIZE, N_SENTIMENT_CLASSES)
 
 
     def forward(self, input_ids, attention_mask):
@@ -82,8 +92,7 @@ class MultitaskBERT(nn.Module):
         # Here, you can start by just returning the embeddings straight from BERT.
         # When thinking of improvements, you can later try modifying this
         # (e.g., by adding other layers).
-        ### TODO
-        raise NotImplementedError
+        logits
 
 
     def predict_sentiment(self, input_ids, attention_mask):
@@ -93,7 +102,12 @@ class MultitaskBERT(nn.Module):
         Thus, your output should contain 5 logits for each sentence.
         '''
         ### TODO
-        raise NotImplementedError
+        bert_output = self.forward(input_ids, attention_mask)
+        hidden_output = F.relu(self.sentiment_linear(bert_output))
+        logits = self.sentiment_out(hidden_output)
+        return logits
+
+
 
 
     def predict_paraphrase(self,
