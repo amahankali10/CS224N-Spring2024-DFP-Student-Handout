@@ -14,7 +14,7 @@ writes all required submission files.
 
 import random, numpy as np, argparse
 from types import SimpleNamespace
-
+import math
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -75,15 +75,15 @@ class MultitaskBERT(nn.Module):
         
         self.sentiment_dropout = nn.Dropout(config.hidden_dropout_prob)
         self.sentiment_linear = nn.Linear(BERT_HIDDEN_SIZE, BERT_HIDDEN_SIZE)
-        self.sentiment_out = nn.Linear(BERT_HIDDEN_SIZE, N_SENTIMENT_CLASSES)
+        self.sentiment_out = nn.Linear(BERT_HIDDEN_SIZE, config.num_labels)
 
         self.paraphrase_dropout = nn.Dropout(config.hidden_dropout_prob)
         self.paraphrase_linear = nn.Linear(BERT_HIDDEN_SIZE, BERT_HIDDEN_SIZE)
-        self.paraphrase_out = nn.Linear(BERT_HIDDEN_SIZE, N_SENTIMENT_CLASSES)
+        self.paraphrase_out = nn.Linear(BERT_HIDDEN_SIZE, config.num_labels)
 
         self.similar_dropout = nn.Dropout(config.hidden_dropout_prob)
         self.similar_linear = nn.Linear(BERT_HIDDEN_SIZE, BERT_HIDDEN_SIZE)
-        self.similar_out = nn.Linear(BERT_HIDDEN_SIZE, N_SENTIMENT_CLASSES)
+        self.similar_out = nn.Linear(1, config.num_labels)
 
 
     def forward(self, input_ids, attention_mask):
@@ -92,7 +92,9 @@ class MultitaskBERT(nn.Module):
         # Here, you can start by just returning the embeddings straight from BERT.
         # When thinking of improvements, you can later try modifying this
         # (e.g., by adding other layers).
-        logits
+        output = self.bert(input_ids, attention_mask)
+        final = output['pooler_output']
+        return final
 
 
     def predict_sentiment(self, input_ids, attention_mask):
@@ -103,6 +105,7 @@ class MultitaskBERT(nn.Module):
         '''
         ### TODO
         bert_output = self.forward(input_ids, attention_mask)
+        bert_output = self.sentiment_dropout(bert_output)
         hidden_output = F.relu(self.sentiment_linear(bert_output))
         logits = self.sentiment_out(hidden_output)
         return logits
@@ -117,8 +120,20 @@ class MultitaskBERT(nn.Module):
         Note that your output should be unnormalized (a logit); it will be passed to the sigmoid function
         during evaluation.
         '''
-        ### TODO
-        raise NotImplementedError
+        bert_output1 = self.forward(input_ids_1, attention_mask_1)
+        bert_output2 = self.forward(input_ids_2, attention_mask_2)
+        
+
+        bert_diff = bert_output1 - bert_output2
+        bert_diff = self.paraphrase_dropout(bert_diff)
+
+        hidden_output1 = F.relu(self.paraphrase_linear(bert_diff))
+        output = self.paraphrase_out(hidden_output1)
+
+        return output
+
+
+        
 
 
     def predict_similarity(self,
@@ -127,9 +142,20 @@ class MultitaskBERT(nn.Module):
         '''Given a batch of pairs of sentences, outputs a single logit corresponding to how similar they are.
         Note that your output should be unnormalized (a logit).
         '''
-        ### TODO
-        raise NotImplementedError
+        bert_output1 = self.forward(input_ids_1, attention_mask_1)
+        bert_output1 = self.similar_dropout(bert_output1)
+        hidden_output1 = F.relu(self.similar_linear(bert_output1))
 
+        bert_output2 = self.forward(input_ids_2, attention_mask_2)
+        bert_output2 = self.similar_dropout(bert_output2)
+        hidden_output2 = F.relu(self.similar_linear(bert_output2))
+
+        cos_square=np.dot(hidden_output1, hidden_output2)**2/(np.dot(hidden_output1, hidden_output1)*np.dot(hidden_output2, hidden_output2))
+        cos=math.sqrt(cos_square)
+        logits = self.similar_out(cos)
+
+        return logits
+        
 
 
 
