@@ -72,10 +72,23 @@ class MultitaskBERT(nn.Module):
             elif config.fine_tune_mode == 'full-model':
                 param.requires_grad = True
         # You will want to add layers here to perform the downstream tasks.
-        ### TODO
-        self.sentiment_classifier = nn.Linear(BERT_HIDDEN_SIZE, N_SENTIMENT_CLASSES)
-        self.paraphrase_classifier = nn.Linear(BERT_HIDDEN_SIZE * 2, 1)
-        self.similarity_classifier = nn.Linear(BERT_HIDDEN_SIZE * 2, 1)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.sentiment_classifier = nn.Sequential(
+            nn.Linear(BERT_HIDDEN_SIZE, BERT_HIDDEN_SIZE // 2),
+            nn.ReLU(),
+            nn.Linear(BERT_HIDDEN_SIZE // 2, N_SENTIMENT_CLASSES)
+        )
+
+        self.paraphrase_classifier = nn.Sequential(
+            nn.Linear(BERT_HIDDEN_SIZE * 2, BERT_HIDDEN_SIZE),
+            nn.ReLU(),
+            nn.Linear(BERT_HIDDEN_SIZE, 1)
+        )
+        self.similarity_classifier = nn.Sequential(
+            nn.Linear(BERT_HIDDEN_SIZE * 2, BERT_HIDDEN_SIZE),
+            nn.ReLU(),
+            nn.Linear(BERT_HIDDEN_SIZE, 1)
+        )
 
     def forward(self, input_ids, attention_mask):
         'Takes a batch of sentences and produces embeddings for them.'
@@ -83,9 +96,11 @@ class MultitaskBERT(nn.Module):
         # Here, you can start by just returning the embeddings straight from BERT.
         # When thinking of improvements, you can later try modifying this
         # (e.g., by adding other layers).
-        ### TODO
-
-        return self.bert(input_ids, attention_mask)['pooler_output']
+        
+         
+        x = self.bert(input_ids, attention_mask)['pooler_output']
+        x = self.dropout(x)
+        return x
 
     def predict_sentiment(self, input_ids, attention_mask):
         '''Given a batch of sentences, outputs logits for classifying sentiment.
