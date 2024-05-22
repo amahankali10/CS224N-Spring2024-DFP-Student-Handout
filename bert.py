@@ -49,14 +49,13 @@ class BertSelfAttention(nn.Module):
     # - Multiply the attention scores with the value to get back weighted values.
     # - Before returning, concatenate multi-heads to recover the original shape:
     #   [bs, seq_len, num_attention_heads * attention_head_size = hidden_size].
-    print(key.shape, query.shape)
     ### TODO
     bs, num_attention_heads, seq_len, embedding_length = key.shape
     key_t = key.transpose(-1, -2)
     scores = torch.matmul(query, key_t)
     norm_scores = scores/(math.sqrt(embedding_length))
     norm_scores += attention_mask
-    softmax = F.softmax(norm_scores,axis=-1)
+    softmax = F.softmax(norm_scores,dim=-1)
 
     attention = torch.matmul(softmax, value).transpose(1, 2).contiguous()
     output = attention.view(bs, seq_len, embedding_length * num_attention_heads)
@@ -130,7 +129,7 @@ class BertLayer(nn.Module):
     ##
     attention_output = self.self_attention(hidden_states, attention_mask)
     ff_input = self.add_norm(hidden_states, attention_output, self.attention_dense, self.attention_dropout, self.attention_layer_norm)
-    ff_output = self.interm_af(self.interm_af(ff_input))
+    ff_output = self.interm_af(self.interm_dense(ff_input))
     output = self.add_norm(ff_input, ff_output, self.out_dense, self.attention_dropout, self.out_layer_norm)
     return output
 
