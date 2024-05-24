@@ -118,11 +118,14 @@ def model_eval_multitask(sentiment_dataloader,
 
             logits = model.predict_similarity(b_ids1, b_mask1, b_ids2, b_mask2)
             y_hat = logits.flatten().cpu().numpy()
+            # print('BLABELS Shape: ', b_labels.shape)
             b_labels = b_labels.flatten().cpu().numpy()
 
             sts_y_pred.extend(y_hat)
             sts_y_true.extend(b_labels)
             sts_sent_ids.extend(b_sent_ids)
+        print('B LABELS: ', sts_y_true)
+        print('y hat: ', sts_y_pred)
         pearson_mat = np.corrcoef(sts_y_pred,sts_y_true)
         sts_corr = pearson_mat[1][0]
 
