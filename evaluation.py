@@ -8,7 +8,7 @@ model_eval_multitask to evaluate your model on the 3 tasks' dev sets.
 '''
 
 import torch
-from sklearn.metrics import f1_score, accuracy_score
+from sklearn.metrics import f1_score, accuracy_score, recall_score, precision_score
 from tqdm import tqdm
 import numpy as np
 
@@ -73,6 +73,9 @@ def model_eval_multitask(sentiment_dataloader,
             sst_sent_ids.extend(b_sent_ids)
 
         sentiment_accuracy = np.mean(np.array(sst_y_pred) == np.array(sst_y_true))
+        sentiment_f1 = f1_score(sst_y_true, sst_y_pred, average='macro')
+        sentiment_recall = recall_score(sst_y_true, sst_y_pred, average='macro')
+        sentiment_precision = precision_score(sst_y_true, sst_y_pred, average='macro')
 
         # Evaluate paraphrase detection.
         para_y_true = []
@@ -99,6 +102,9 @@ def model_eval_multitask(sentiment_dataloader,
             para_sent_ids.extend(b_sent_ids)
 
         paraphrase_accuracy = np.mean(np.array(para_y_pred) == np.array(para_y_true))
+        paraphrase_f1 = f1_score(para_y_true, para_y_pred, average='macro')
+        paraphrase_recall = recall_score(para_y_true, para_y_pred, average='macro')
+        paraphrase_precision = precision_score(sst_y_true, sst_y_pred, average='macro')
 
         # Evaluate semantic textual similarity.
         sts_y_true = []
@@ -130,7 +136,15 @@ def model_eval_multitask(sentiment_dataloader,
         sts_corr = pearson_mat[1][0]
 
         print(f'Sentiment classification accuracy: {sentiment_accuracy:.3f}')
+        print(f'Sentiment classification F1: {sentiment_f1:.3f}')
+        print(f'Sentiment classification recall: {sentiment_recall:.3f}')
+        print(f'Sentiment classification precision: {sentiment_precision:.3f}')
+
         print(f'Paraphrase detection accuracy: {paraphrase_accuracy:.3f}')
+        print(f'Paraphrase detection F1: {paraphrase_f1:.3f}')
+        print(f'Paraphrase detection recall: {paraphrase_recall:.3f}')
+        print(f'Paraphrase detection precision: {paraphrase_precision:.3f}')
+
         print(f'Semantic Textual Similarity correlation: {sts_corr:.3f}')
 
         return (sentiment_accuracy,sst_y_pred, sst_sent_ids,

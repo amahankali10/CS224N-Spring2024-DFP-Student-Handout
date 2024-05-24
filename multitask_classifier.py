@@ -15,6 +15,7 @@ writes all required submission files.
 import random, numpy as np, argparse
 from types import SimpleNamespace
 import math
+import matplotlib.pyplot as plt
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -94,7 +95,7 @@ class MultitaskBERT(nn.Module):
         # (e.g., by adding other layers).
         output = self.bert(input_ids, attention_mask)
         final = output['pooler_output']
-       return final
+        return final
 
 
     def predict_sentiment(self, input_ids, attention_mask):
@@ -231,7 +232,7 @@ def train_multitask(args):
     lr = args.lr
     optimizer = AdamW(model.parameters(), lr=lr)
     best_dev_acc = 0
-    
+    losses = []
     # Run for the specified number of epochs.
     for epoch in range(args.epochs):
         model.train()
@@ -256,15 +257,27 @@ def train_multitask(args):
             num_batches += 1
 
         train_loss = train_loss / (num_batches)
+        losses.append(train_loss)
 
         train_acc, train_f1, *_ = model_eval_sst(sst_train_dataloader, model, device)
         dev_acc, dev_f1, *_ = model_eval_sst(sst_dev_dataloader, model, device)
+        print(f'Dev accuracy: {dev_acc}')
+        print(f'Dev F1: {dev_f1}')
 
         if dev_acc > best_dev_acc:
             best_dev_acc = dev_acc
             save_model(model, optimizer, args, config, args.filepath)
 
         print(f"Epoch {epoch}: train loss :: {train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")
+
+    plt.figure()
+    plt.plot(losses, label='Training Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training Loss Curve')
+    plt.legend()
+    plt.savefig('trainingloss.png')
+    plt.show()
 
 
 def test_multitask(args):
