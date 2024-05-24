@@ -48,8 +48,8 @@ class BertSentimentClassifier(torch.nn.Module):
                 param.requires_grad = True
 
         # Create any instance variables you need to classify the sentiment of BERT embeddings.
-        self.dropout_layer = torch.nn.Dropout(config['hidden_dropout_prob'])
-        self.classification_layer = torch.nn.Linear(config['hidden_size'], config['num_labels'])
+        self.dropout_layer = torch.nn.Dropout(config.hidden_dropout_prob)
+        self.classification_layer = torch.nn.Linear(config.hidden_size, config.num_labels)
         
 
     def forward(self, input_ids, attention_mask):
@@ -290,7 +290,7 @@ def train(args):
 
         if dev_acc > best_dev_acc:
             best_dev_acc = dev_acc
-            save_model(model, optimizer, args, config, args.filepath)
+           save_model(model, optimizer, args, config, args.filepath)
 
         print(f"Epoch {epoch}: train loss :: {train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")
 
