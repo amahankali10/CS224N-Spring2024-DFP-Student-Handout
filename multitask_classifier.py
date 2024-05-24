@@ -16,6 +16,7 @@ import random, numpy as np, argparse
 from types import SimpleNamespace
 import math
 from pcgrad import PCGrad
+import matplotlib.pyplot as plt
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -76,15 +77,15 @@ class MultitaskBERT(nn.Module):
         
         self.sentiment_dropout = nn.Dropout(config.hidden_dropout_prob)
         self.sentiment_linear = nn.Linear(BERT_HIDDEN_SIZE, BERT_HIDDEN_SIZE)
-        self.sentiment_out = nn.Linear(BERT_HIDDEN_SIZE, config.num_labels)
+        self.sentiment_out = nn.Linear(BERT_HIDDEN_SIZE, 5)
 
         self.paraphrase_dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.paraphrase_linear = nn.Linear(BERT_HIDDEN_SIZE, BERT_HIDDEN_SIZE)
-        self.paraphrase_out = nn.Linear(BERT_HIDDEN_SIZE, config.num_labels)
+        self.paraphrase_linear = nn.Linear(BERT_HIDDEN_SIZE * 3, BERT_HIDDEN_SIZE)
+        self.paraphrase_out = nn.Linear(BERT_HIDDEN_SIZE, 2)
 
         self.similar_dropout = nn.Dropout(config.hidden_dropout_prob)
         self.similar_linear = nn.Linear(BERT_HIDDEN_SIZE, BERT_HIDDEN_SIZE)
-        self.similar_out = nn.Linear(1, config.num_labels)
+        self.similar_out = nn.Linear(1, 5)
 
 
     def forward(self, input_ids, attention_mask):
@@ -124,14 +125,13 @@ class MultitaskBERT(nn.Module):
         bert_output1 = self.forward(input_ids_1, attention_mask_1)
         bert_output2 = self.forward(input_ids_2, attention_mask_2)
         
-
         bert_diff = bert_output1 - bert_output2
         bert_diff = self.paraphrase_dropout(bert_diff)
-
-        hidden_output1 = F.relu(self.paraphrase_linear(bert_diff))
+        bert_concat = torch.concat((bert_output1, bert_output2, bert_diff), dim=-1)
+        hidden_output1 = F.relu(self.paraphrase_linear(bert_concat))
         output = self.paraphrase_out(hidden_output1)
 
-        return output
+        return output.argmax(dim=-1)
 
 
         
@@ -143,6 +143,9 @@ class MultitaskBERT(nn.Module):
         '''Given a batch of pairs of sentences, outputs a single logit corresponding to how similar they are.
         Note that your output should be unnormalized (a logit).
         '''
+        # print(f'BERT SHAPES: {bert_output1.shape}')
+        # print(f'HIDDEN SHAPES: {hidden_output1.shape}')
+
         bert_output1 = self.forward(input_ids_1, attention_mask_1)
         bert_output1 = self.similar_dropout(bert_output1)
         hidden_output1 = F.relu(self.similar_linear(bert_output1))
@@ -150,12 +153,31 @@ class MultitaskBERT(nn.Module):
         bert_output2 = self.forward(input_ids_2, attention_mask_2)
         bert_output2 = self.similar_dropout(bert_output2)
         hidden_output2 = F.relu(self.similar_linear(bert_output2))
+        
+        # hidden_output1 = hidden_output1.view(-1)
+        # hidden_output2 = hidden_output2.view(-1)
+        print(f'BERT OUTPUT1: {bert_output1}')
+        print(f'BERT OUTPUT2: {bert_output2}')
+        # print(f'BERT SHAPES: {bert_output1.shape}')
+        # print(f'HIDDEN SHAPES: {hidden_output1.shape}')
+        # cos_square=torch.dot(hidden_output1, hidden_output2)**2/(torch.dot(hidden_output1, hidden_output1)*torch.dot(hidden_output2, hidden_output2))
+        # cos=math.sqrt(cos_square)
+        # cosTensor = torch.tensor(cos).unsqueeze(0)
+        # logits = self.similar_out(cosTensor)
+        # cos_similarity = F.cosine_similarity(bert_output1, bert_output2, dim=1)
+        cos_similarity = torch.cosine_similarity(bert_output1, bert_output2)
+        # print(f'cos_similarity shapes: {cos_similarity.shape}')
+        # Convert to a 1D tensor
 
-        cos_square=np.dot(hidden_output1, hidden_output2)**2/(np.dot(hidden_output1, hidden_output1)*np.dot(hidden_output2, hidden_output2))
-        cos=math.sqrt(cos_square)
-        logits = self.similar_out(cos)
-
-        return logits
+        # cosTensor = cos_similarity.unsqueeze(1)
+        # print(f'cosTensor shape: {cosTensor.shape}')
+        # logits = self.similar_out(cosTensor)
+        # singleLogit = torch.max(logits, dim=1).unsqueeze(0)
+        # print(f'Logits shape: {logits.shape}')
+        minimum=torch.min(cos_similarity)
+        cos_similarity -= minimum
+        cos_similarity/=torch.max(cos_similarity)
+        return cos_similarity * 5
         
 
 
@@ -236,7 +258,7 @@ def train_multitask(args):
     base_optimizer = AdamW(model.parameters(), lr=lr)
     optimizer = PCGrad(base_optimizer)
     best_dev_acc = 0
-
+    losses = []
     # Run for the specified number of epochs.
     for epoch in range(args.epochs):
         model.train()
@@ -301,15 +323,27 @@ def train_multitask(args):
             num_batches += 1
 
         train_loss = train_loss / (num_batches)
+        losses.append(train_loss)
 
-        sst_train_acc, sst_train_f1, *_ = model_eval_multitask(sst_train_dataloader, para_train_dataloader, sts_train_dataloader, model, device)
-        sst_dev_acc, sst_dev_f1, *_ = model_eval_sst(sst_train_dataloader, para_train_dataloader, sts_train_dataloader, model, device)
+        sst_train_acc, para_train_acc, sts_train_corr, *_ = model_eval_multitask(sst_train_dataloader, para_train_dataloader, sts_train_dataloader, model, device)
+        sst_dev_acc, para_dev_acc, sts_dev_corr, *_ = model_eval_multitask(sst_dev_dataloader, para_dev_dataloader, sts_dev_dataloader, model, device)
+        print(f'Dev accuracy: {dev_acc}')
+        print(f'Dev F1: {dev_f1}')
 
-        if sst_dev_acc > best_dev_acc:
-            best_dev_acc = sst_dev_acc
+        if sst_dev_acc + para_dev_acc + sts_dev_corr > best_dev_acc:
+            best_dev_acc = sst_dev_acc + para_dev_acc + sts_dev_corr 
             save_model(model, optimizer, args, config, args.filepath)
 
-        print(f"Epoch {epoch}: train loss :: {train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")
+        print(f"Epoch {epoch}: train loss :: {train_loss :.3f}, sentiment train acc :: {sst_train_acc :.3f}, sentiment dev acc :: {sst_dev_acc :.3f}")
+
+    plt.figure()
+    plt.plot(losses, label='Training Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training Loss Curve')
+    plt.legend()
+    plt.savefig('trainingloss.png')
+    plt.show()
 
 
 def test_multitask(args):
@@ -361,7 +395,7 @@ def test_multitask(args):
                                                                     sts_dev_dataloader, model, device)
 
         test_sst_y_pred, \
-            test_sst_sent_ids, test_para_y_pred, test_para_sent_ids, test_sts_y_pred, test_sts_sent_ids = \
+                test_sst_sent_ids, test_para_y_pred, test_para_sent_ids, test_sts_y_pred, test_sts_sent_ids = \
                 model_eval_test_multitask(sst_test_dataloader,
                                           para_test_dataloader,
                                           sts_test_dataloader, model, device)
