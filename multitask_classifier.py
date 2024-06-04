@@ -174,8 +174,8 @@ def train_multitask(args):
     sst_dev_dataloader = DataLoader(sst_dev_data, shuffle=False, batch_size=args.batch_size,
                                     collate_fn=sst_dev_data.collate_fn)
 
-    para_train_data = SentencePairTestDataset(para_train_data, args)
-    para_dev_data = SentencePairDataset(para_dev_data, args)
+    para_train_data = SentencePairDataset(para_train_data, args, isRegression=True)
+    para_dev_data = SentencePairDataset(para_dev_data, args, isRegression=True)
 
     para_train_dataloader = DataLoader(para_train_data, shuffle=True, batch_size=args.batch_size,
                                       collate_fn=para_train_data.collate_fn)
@@ -198,12 +198,17 @@ def train_multitask(args):
     optimizer = AdamW(model.parameters(), lr=lr)
     best_dev_acc = 0
 
+    disable = False
+
     # Run for the specified number of epochs.
     for epoch in range(args.epochs):
+        if disable:
+            print(f"Epoch {epoch}")
+            continue
         model.train()
         train_loss = 0
         num_batches = 0
-        for batch in tqdm(sst_train_dataloader, desc=f'train-{epoch}', disable=TQDM_DISABLE):
+        for batch in tqdm(sst_train_dataloader, desc=f'sst-train-{epoch}', disable=TQDM_DISABLE):
             b_ids, b_mask, b_labels = (batch['token_ids'],
                                        batch['attention_mask'], batch['labels'])
 
@@ -236,7 +241,7 @@ def train_multitask(args):
         model.train()
         train_loss = 0
         num_batches = 0
-        for batch in tqdm(para_train_dataloader, desc=f'eval', disable=TQDM_DISABLE):
+        for idx, batch in enumerate(tqdm(para_train_dataloader, desc=f'para-train-{epoch}', disable=TQDM_DISABLE)):
             (b_ids1, b_mask1,
              b_ids2, b_mask2,
              b_labels) = (batch['token_ids_1'], batch['attention_mask_1'],
@@ -247,10 +252,11 @@ def train_multitask(args):
             b_mask1 = b_mask1.to(device)
             b_ids2 = b_ids2.to(device)
             b_mask2 = b_mask2.to(device)
+            b_labels = b_labels.to(device)
             
             optimizer.zero_grad()
             logits = model.predict_paraphrase(b_ids1, b_mask1, b_ids2, b_mask2)
-            loss = F.binary_cross_entropy_with_logits(logits, b_labels.view(-1), reduction='sum') / args.batch_size
+            loss = F.binary_cross_entropy_with_logits(logits.view(-1), b_labels, reduction='sum') / args.batch_size
 
             loss.backward()
             optimizer.step()
