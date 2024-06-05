@@ -63,7 +63,7 @@ def model_eval_paraphrase(dataloader, model, device):
         b_mask2 = b_mask2.to(device)
 
         logits = model.predict_paraphrase(b_ids1, b_mask1, b_ids2, b_mask2)
-        y_hat = logits.flatten().sigmoid().detach().cpu().numpy()
+        y_hat = logits.flatten().sigmoid().detach().cpu().numpy() > 0.5
         b_labels = b_labels.cpu().numpy()
 
         para_y_pred.extend(y_hat)
