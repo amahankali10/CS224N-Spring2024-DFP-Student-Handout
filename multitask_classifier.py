@@ -374,6 +374,8 @@ def test_multitask(args):
 
 def get_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--train-datasets", type=str, nargs='+', default=["sst", "para", "sts"])
+    parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--sst_train", type=str, default="data/ids-sst-train.csv")
     parser.add_argument("--sst_dev", type=str, default="data/ids-sst-dev.csv")
     parser.add_argument("--sst_test", type=str, default="data/ids-sst-test-student.csv")

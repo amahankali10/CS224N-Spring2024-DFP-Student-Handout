@@ -101,7 +101,7 @@ class SentenceClassificationTestDataset(Dataset):
 
 class SentencePairDataset(Dataset):
     def __init__(self, dataset, args, isRegression=False):
-        self.dataset = dataset
+        self.dataset = dataset[:1000] if args.debug else dataset
         self.p = args
         self.isRegression = isRegression 
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
