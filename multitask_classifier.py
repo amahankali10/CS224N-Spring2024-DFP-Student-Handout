@@ -32,7 +32,7 @@ from datasets import (
     load_multitask_data
 )
 
-from evaluation import model_eval_sst, model_eval_paraphrase, model_eval_multitask, model_eval_test_multitask
+from evaluation import model_eval_sst, model_eval_paraphrase, model_eval_multitask, model_eval_test_multitask, model_eval_sts
 
 
 TQDM_DISABLE=False
@@ -248,6 +248,8 @@ def train_multitask(args):
 
             print(f"Epoch {epoch}: train loss :: {train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")
 
+    best_dev_acc = 0
+
     if 'para' in args.train_datasets:
         for epoch in range(args.epochs):
             model.train()
@@ -287,12 +289,14 @@ def train_multitask(args):
 
             print(f"Epoch {epoch}: train loss :: {train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")
 
+    best_dev_coef = 0
+
     if 'sts' in args.train_datasets:
         for epoch in range(args.epochs):
             model.train()
             train_loss = 0
             num_batches = 0
-            for idx, batch in enumerate(tqdm(sst_train_dataloader, desc=f'sts-train-{epoch}', disable=TQDM_DISABLE)):
+            for idx, batch in enumerate(tqdm(sts_train_dataloader, desc=f'sts-train-{epoch}', disable=TQDM_DISABLE)):
                 (b_ids1, b_mask1,
                  b_ids2, b_mask2,
                  b_labels) = (batch['token_ids_1'], batch['attention_mask_1'],
@@ -317,14 +321,14 @@ def train_multitask(args):
 
             train_loss = train_loss / (num_batches)
 
-            train_acc, *_ = model_eval_sst(sst_train_dataloader, model, device)
-            dev_acc, *_ = model_eval_sst(sst_dev_dataloader, model, device)
-
-            if dev_acc > best_dev_acc:
-                best_dev_acc = dev_acc
+            train_coef, *_ = model_eval_sts(sts_train_dataloader, model, device)
+            dev_coef, *_ = model_eval_sts(sts_dev_dataloader, model, device)
+            
+            if dev_coef > best_dev_coef:
+                best_dev_coef = dev_coef
                 save_model(model, optimizer, args, config, args.filepath)
 
-            print(f"Epoch {epoch}: train loss :: {train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")
+            print(f"Epoch {epoch}: train loss :: {train_loss :.3f}, train coef :: {train_coef :.3f}, dev coef :: {dev_coef :.3f}")
 
 
 
