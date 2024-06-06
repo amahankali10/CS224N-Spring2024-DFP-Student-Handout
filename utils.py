@@ -345,3 +345,12 @@ def get_extended_attention_mask(attention_mask: Tensor, dtype) -> Tensor:
   extended_attention_mask = extended_attention_mask.to(dtype=dtype)  # fp16 compatibility
   extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
   return extended_attention_mask
+
+def get_device(use_gpu):
+    device = torch.device('cpu')
+    if use_gpu:
+        if torch.cuda.is_available():
+            device = torch.device('cuda')
+        else:
+            device = torch.device('mps')
+    return device

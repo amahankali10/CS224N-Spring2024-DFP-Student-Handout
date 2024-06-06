@@ -33,9 +33,8 @@ from datasets import (
 )
 
 from evaluation import model_eval_sst, model_eval_paraphrase, model_eval_multitask, model_eval_test_multitask, model_eval_sts
-
-
-TQDM_DISABLE=False
+from train_functions import training_loop, sst_batch_loss, para_batch_loss, sts_batch_loss
+from utils import get_device
 
 
 # Fix the random seed.
@@ -138,19 +137,6 @@ class MultitaskBERT(nn.Module):
         hidden_states = torch.cat((hidden_states_1, hidden_states_2), dim=1)
         return self.similarity_classifier(hidden_states)
 
-def save_model(model, optimizer, args, config, filepath):
-    save_info = {
-        'model': model.state_dict(),
-        'optim': optimizer.state_dict(),
-        'args': args,
-        'model_config': config,
-        'system_rng': random.getstate(),
-        'numpy_rng': np.random.get_state(),
-        'torch_rng': torch.random.get_rng_state(),
-    }
-
-    torch.save(save_info, filepath)
-    print(f"save the model to {filepath}")
 
 
 def train_multitask(args):
@@ -161,13 +147,7 @@ def train_multitask(args):
     look at test_multitask below to see how you can use the custom torch `Dataset`s
     in datasets.py to load in examples from the Quora and SemEval datasets.
     '''
-    device = torch.device('cpu')
-
-    if args.use_gpu:
-        if torch.cuda.is_available():
-            device = torch.device('cuda')
-        else:
-            device = torch.device('mps')
+    device = get_device(args.use_gpu)
 
     # Create the data and its corresponding datasets and dataloader.
     sst_train_data, num_labels,para_train_data, sts_train_data = load_multitask_data(args.sst_train,args.para_train,args.sts_train, split ='train')
@@ -211,131 +191,23 @@ def train_multitask(args):
 
     lr = args.lr
     optimizer = AdamW(model.parameters(), lr=lr)
-    best_dev_acc = 0
 
     # Run for the specified number of epochs.
     if 'sst' in args.train_datasets:
-        for epoch in range(args.epochs):
-            model.train()
-            train_loss = 0
-            num_batches = 0
-            for batch in tqdm(sst_train_dataloader, desc=f'sst-train-{epoch}', disable=TQDM_DISABLE):
-                b_ids, b_mask, b_labels = (batch['token_ids'],
-                                           batch['attention_mask'], batch['labels'])
-
-                b_ids = b_ids.to(device)
-                b_mask = b_mask.to(device)
-                b_labels = b_labels.to(device)
-
-                optimizer.zero_grad()
-                logits = model.predict_sentiment(b_ids, b_mask)
-                loss = F.cross_entropy(logits, b_labels.view(-1), reduction='sum') / args.batch_size
-
-                loss.backward()
-                optimizer.step()
-
-                train_loss += loss.item()
-                num_batches += 1
-
-            train_loss = train_loss / (num_batches)
-
-            train_acc, train_f1, *_ = model_eval_sst(sst_train_dataloader, model, device)
-            dev_acc, dev_f1, *_ = model_eval_sst(sst_dev_dataloader, model, device)
-
-            if dev_acc > best_dev_acc:
-                best_dev_acc = dev_acc
-                save_model(model, optimizer, args, config, args.filepath)
-
-            print(f"Epoch {epoch}: train loss :: {train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")
-
-    best_dev_acc = 0
+        training_loop(args, model, optimizer, sst_batch_loss, sst_train_dataloader, sst_dev_dataloader, device, config, model_eval_sst)
 
     if 'para' in args.train_datasets:
-        for epoch in range(args.epochs):
-            model.train()
-            train_loss = 0
-            num_batches = 0
-            for idx, batch in enumerate(tqdm(para_train_dataloader, desc=f'para-train-{epoch}', disable=TQDM_DISABLE)):
-                (b_ids1, b_mask1,
-                 b_ids2, b_mask2,
-                 b_labels) = (batch['token_ids_1'], batch['attention_mask_1'],
-                              batch['token_ids_2'], batch['attention_mask_2'],
-                              batch['labels'])
-
-                b_ids1 = b_ids1.to(device)
-                b_mask1 = b_mask1.to(device)
-                b_ids2 = b_ids2.to(device)
-                b_mask2 = b_mask2.to(device)
-                b_labels = b_labels.to(device)
-                
-                optimizer.zero_grad()
-                logits = model.predict_paraphrase(b_ids1, b_mask1, b_ids2, b_mask2)
-                loss = F.binary_cross_entropy_with_logits(logits.view(-1), b_labels, reduction='sum') / args.batch_size
-
-                loss.backward()
-                optimizer.step()
-
-                train_loss += loss.item()
-                num_batches += 1
-
-            train_loss = train_loss / (num_batches)
-
-            train_acc, *_ = model_eval_paraphrase(para_train_dataloader, model, device)
-            dev_acc, *_ = model_eval_paraphrase(para_dev_dataloader, model, device)
-
-            if dev_acc > best_dev_acc:
-                best_dev_acc = dev_acc
-                save_model(model, optimizer, args, config, args.filepath)
-
-            print(f"Epoch {epoch}: train loss :: {train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")
-
-    best_dev_coef = 0
+        training_loop(args, model, optimizer, para_batch_loss, para_train_dataloader, para_dev_dataloader, device, config, model_eval_paraphrase)
 
     if 'sts' in args.train_datasets:
-        for epoch in range(args.epochs):
-            model.train()
-            train_loss = 0
-            num_batches = 0
-            for idx, batch in enumerate(tqdm(sts_train_dataloader, desc=f'sts-train-{epoch}', disable=TQDM_DISABLE)):
-                (b_ids1, b_mask1,
-                 b_ids2, b_mask2,
-                 b_labels) = (batch['token_ids_1'], batch['attention_mask_1'],
-                              batch['token_ids_2'], batch['attention_mask_2'],
-                              batch['labels'])
-
-                b_ids1 = b_ids1.to(device)
-                b_mask1 = b_mask1.to(device)
-                b_ids2 = b_ids2.to(device)
-                b_mask2 = b_mask2.to(device)
-                b_labels = b_labels.to(device)
-                
-                optimizer.zero_grad()
-                logits = model.predict_similarity(b_ids1, b_mask1, b_ids2, b_mask2)
-                loss = F.mse_loss(logits, b_labels.view(-1), reduction='sum') / args.batch_size
-
-                loss.backward()
-                optimizer.step()
-
-                train_loss += loss.item()
-                num_batches += 1
-
-            train_loss = train_loss / (num_batches)
-
-            train_coef, *_ = model_eval_sts(sts_train_dataloader, model, device)
-            dev_coef, *_ = model_eval_sts(sts_dev_dataloader, model, device)
-            
-            if dev_coef > best_dev_coef:
-                best_dev_coef = dev_coef
-                save_model(model, optimizer, args, config, args.filepath)
-
-            print(f"Epoch {epoch}: train loss :: {train_loss :.3f}, train coef :: {train_coef :.3f}, dev coef :: {dev_coef :.3f}")
+        training_loop(args, model, optimizer, sts_batch_loss, sts_train_dataloader, sts_dev_dataloader, device, config, model_eval_sts)
 
 
 
 def test_multitask(args):
     '''Test and save predictions on the dev and test sets of all three tasks.'''
     with torch.no_grad():
-        device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
+        device = get_device(args.use_gpu)
         saved = torch.load(args.filepath)
         config = saved['model_config']
 
@@ -424,6 +296,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--train-datasets", type=str, nargs='+', default=["sst", "para", "sts"])
     parser.add_argument("--debug", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--tqdm-disable", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--sst_train", type=str, default="data/ids-sst-train.csv")
     parser.add_argument("--sst_dev", type=str, default="data/ids-sst-dev.csv")
     parser.add_argument("--sst_test", type=str, default="data/ids-sst-test-student.csv")
