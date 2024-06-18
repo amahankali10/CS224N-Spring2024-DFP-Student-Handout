@@ -48,20 +48,19 @@ class BertSentimentClassifier(torch.nn.Module):
                 param.requires_grad = True
 
         # Create any instance variables you need to classify the sentiment of BERT embeddings.
-        ### TODO
-        raise NotImplementedError
-
+        self.dropout_layer = torch.nn.Dropout(config.hidden_dropout_prob)
+        self.classification_layer = torch.nn.Linear(config.hidden_size, config.num_labels)
+        
 
     def forward(self, input_ids, attention_mask):
         '''Takes a batch of sentences and returns logits for sentiment classes'''
         # The final BERT contextualized embedding is the hidden state of [CLS] token (the first token).
         # HINT: You should consider what is an appropriate return value given that
         # the training loop currently uses F.cross_entropy as the loss function.
-        ### TODO
-        raise NotImplementedError
-
-
-
+        output = self.bert(input_ids, attention_mask)
+        final = self.dropout_layer(output['pooler_output'])
+        return self.classification_layer(final)
+    
 class SentimentDataset(Dataset):
     def __init__(self, dataset, args):
         self.dataset = dataset
@@ -291,7 +290,7 @@ def train(args):
 
         if dev_acc > best_dev_acc:
             best_dev_acc = dev_acc
-            save_model(model, optimizer, args, config, args.filepath)
+           save_model(model, optimizer, args, config, args.filepath)
 
         print(f"Epoch {epoch}: train loss :: {train_loss :.3f}, train acc :: {train_acc :.3f}, dev acc :: {dev_acc :.3f}")
 
